@@ -7,6 +7,8 @@ import {Logger} from './core/logger';
 import {CacheStorage, ResourceOptions} from './core/cache-storage';
 import {CanvasRenderer, RenderOptions} from './render/canvas/canvas-renderer';
 import {ForeignObjectRenderer} from './render/canvas/foreignobject-renderer';
+import {IframeStorage} from './core/iframe-storage';
+import {FastModeCloner} from './core/fast-mode-cloner';
 
 export type Options = CloneOptions &
     RenderOptions &
@@ -15,6 +17,9 @@ export type Options = CloneOptions &
         foreignObjectRendering: boolean;
         logging: boolean;
         removeContainer?: boolean;
+
+        renderName?: string | null;
+        replaceSelector?: string | null;
     };
 
 const parseColor = (value: string): Color => color.parse(Parser.create(value).parseComponentValue());
@@ -25,7 +30,7 @@ const html2canvas = (element: HTMLElement, options: Partial<Options> = {}): Prom
 
 export default html2canvas;
 
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
     CacheStorage.setContext(window);
 }
 
@@ -71,7 +76,9 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
         y: top,
         width: Math.ceil(width),
         height: Math.ceil(height),
-        id: instanceName
+        id: instanceName,
+        renderName: null,
+        replaceSelector: null
     };
 
     const options: Options = {...defaultOptions, ...resourceOptions, ...opts};
@@ -87,12 +94,46 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
         inlineImages: options.foreignObjectRendering,
         copyStyles: options.foreignObjectRendering
     });
-    const clonedElement = documentCloner.clonedReferenceElement;
+
+    let clonedElement: HTMLElement | undefined;
+
+    let container!: HTMLIFrameElement;
+
+    if (options.replaceSelector && options.renderName) {
+        const cachedIframe = IframeStorage.getIframe(options.renderName);
+
+        if (cachedIframe && cachedIframe.iframe.contentWindow !== null) {
+            container = cachedIframe.iframe;
+
+            const containerWindow = cachedIframe.iframe.contentWindow;
+
+            const fastClone = new FastModeCloner(documentCloner, element, containerWindow, options.replaceSelector);
+
+            const cloneResult = await fastClone.clone();
+
+            if (!cloneResult) {
+                throw new Error('An Error occured, trying to fast clone!');
+            }
+
+            clonedElement = cloneResult.clonedElement;
+        } else {
+            documentCloner.cloneDocument();
+
+            clonedElement = documentCloner.clonedReferenceElement;
+
+            container = await documentCloner.toIFrame(ownerDocument, windowBounds);
+        }
+    } else {
+        documentCloner.cloneDocument();
+
+        clonedElement = documentCloner.clonedReferenceElement;
+
+        container = await documentCloner.toIFrame(ownerDocument, windowBounds);
+    }
+
     if (!clonedElement) {
         return Promise.reject(`Unable to find element in cloned iframe`);
     }
-
-    const container = await documentCloner.toIFrame(ownerDocument, windowBounds);
 
     // http://www.w3.org/TR/css3-background/#special-backgrounds
     const documentBackgroundColor = ownerDocument.documentElement
@@ -159,6 +200,11 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
         if (!DocumentCloner.destroy(container)) {
             Logger.getInstance(instanceName).error(`Cannot detach cloned iframe as it is not in the DOM anymore`);
         }
+    }
+
+    // Save it.
+    if (!!options.renderName) {
+        IframeStorage.saveIframe(options.renderName, container);
     }
 
     Logger.getInstance(instanceName).debug(`Finished rendering`);

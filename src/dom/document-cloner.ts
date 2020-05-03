@@ -38,7 +38,7 @@ export class DocumentCloner {
     private readonly options: CloneConfigurations;
     private readonly referenceElement: HTMLElement;
     clonedReferenceElement?: HTMLElement;
-    private readonly documentElement: HTMLElement;
+    private documentElement!: HTMLElement;
     private readonly counters: CounterState;
     private quoteDepth: number;
 
@@ -52,7 +52,12 @@ export class DocumentCloner {
             throw new Error('Cloned element does not have an owner document');
         }
 
-        this.documentElement = this.cloneNode(element.ownerDocument.documentElement) as HTMLElement;
+    }
+
+    cloneDocument() {
+        const element = this.referenceElement
+
+        this.documentElement = this.cloneNode(element.ownerDocument!.documentElement) as HTMLElement;
     }
 
     toIFrame(ownerDocument: Document, windowSize: Bounds): Promise<HTMLIFrameElement> {
