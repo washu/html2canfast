@@ -54,16 +54,12 @@ export class FastModeCloner {
 
         const clonedReferenceNode = documentCloner.cloneNode(element);
 
-        console.log(clonedReferenceNode);
-
         if (clonedReferenceNode) {
-            console.log('Inside!');
             const containerDoc = containerWindow.document;
 
             const containerReferenceElement = containerDoc.querySelector(referenceSelector);
 
             if (containerReferenceElement) {
-                console.log('Even here...');
                 containerReferenceElement.replaceWith(clonedReferenceNode);
 
                 await this.waitForLoad(clonedReferenceNode);

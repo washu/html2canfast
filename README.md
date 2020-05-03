@@ -1,73 +1,51 @@
-html2canvas
+html2canfast
 ===========
 
-[Homepage](https://html2canvas.hertzen.com) | [Downloads](https://github.com/niklasvh/html2canvas/releases) | [Questions](http://stackoverflow.com/questions/tagged/html2canvas?sort=newest)
+https://codesandbox.io/s/tender-river-ifjlm?file=/src/index.js
 
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/niklasvh/html2canvas?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) 
-[![Build Status](https://dev.azure.com/niklasvh/html2canvas/_apis/build/status/niklasvh.html2canvas?branchName=master)](https://dev.azure.com/niklasvh/html2canvas/_build/latest?definitionId=1&branchName=master)
-[![NPM Downloads](https://img.shields.io/npm/dm/html2canvas.svg)](https://www.npmjs.org/package/html2canvas)
-[![NPM Version](https://img.shields.io/npm/v/html2canvas.svg)](https://www.npmjs.org/package/html2canvas)
 
-#### JavaScript HTML renderer ####
+#### What is html2canfast? ####
 
- The script allows you to take "screenshots" of webpages or parts of it, directly on the users browser. The screenshot is based on the DOM and as such may not be 100% accurate to the real representation as it does not make an actual screenshot, but builds the screenshot based on the information available on the page.
+html2canfast is an experimental version of [html2canvas](https://github.com/niklasvh/html2canvas). As it is a fork of html2canvas, it derives all the syntax and functionality from it, but offers further features, specialized for performance improvements.
 
 
 ### How does it work? ###
-The script renders the current page as a canvas image, by reading the DOM and the different styles applied to the elements.
 
-It does **not require any rendering from the server**, as the whole image is created on the **client's browser**. However, as it is heavily dependent on the browser, this library is *not suitable* to be used in nodejs.
-It doesn't magically circumvent any browser content policy restrictions either, so rendering cross-origin content will require a [proxy](https://github.com/niklasvh/html2canvas/wiki/Proxies) to get the content to the [same origin](http://en.wikipedia.org/wiki/Same_origin_policy).
+html2canfast adds two new (optional) options: renderName and replaceSelector.
+If you plan to take multiple screenshots of the same element, you can enter the 'fast mode', by passing in both these options.
+The renderName is an arbitrary key, which is used to, so to say, cache the created container, so it can be accessed in subsequent screenshots, which means html2canfast is only faster on 1+ screenshots.
+The replaceSelector is the selector for the element you wish to screenshot.
+html2canvas works by creating an iframe of the complete document on each screenshot, which includes having to request all the images, script, links etc. embedded on your site.
+This is, for some purposes, extremely inefficient.
+html2canfast 'caches' this iframe, so that it doesn't have to be re-created on each screenshot.
 
-The script is still in a **very experimental state**, so I don't recommend using it in a production environment nor start building applications with it yet, as there will be still major changes made.
+### Example ###
+You have a game, and want to take 1+ screenshots or the game screen, with the selector '#game'.
+You decide to use the key: 'game-screen'.
 
-### Browser compatibility ###
+    const gameScreen = document.getElementById('#game');
 
-The library should work fine on the following browsers (with `Promise` polyfill):
-
-* Firefox 3.5+
-* Google Chrome
-* Opera 12+
-* IE9+
-* Safari 6+
-
-As each CSS property needs to be manually built to be supported, there are a number of properties that are not yet supported.
-
-### Usage ###
-
-The html2canvas library utilizes `Promise`s and expects them to be available in the global context. If you wish to
-support [older browsers](http://caniuse.com/#search=promise) that do not natively support `Promise`s, please include a polyfill such as
-[es6-promise](https://github.com/jakearchibald/es6-promise) before including `html2canvas`.
-
-To render an `element` with html2canvas, simply call:
-` html2canvas(element[, options]);`
-
-The function returns a [Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) containing the `<canvas>` element. Simply add a promise fulfillment handler to the promise using `then`:
-
-    html2canvas(document.body).then(function(canvas) {
+    html2canvas(gameScreen, {
+        renderName: 'game-screen',
+        replaceSelector: '#game',
+        removeContainer: false
+    }).then(function(canvas) {
         document.body.appendChild(canvas);
     });
 
-### Building ###
+It is crucial to note, that the renderName 'game-screen', should from now on only be used to capture screenshots or the '#game' element, as html2canfast replaces this selector in the 'cached' container.
+Another note, of the utmost importance is that you **must** pass in the removeContainer option as false. Failing to do so will result in now performance improvements.
 
-You can download ready builds [here](https://github.com/niklasvh/html2canvas/releases).
+### How much faster is it? ###
+How much faster html2canfast is, depends mostly on two variables: the overall size (meaning number of elements) of the webpage, and the content size of the external resources (images etc.) embedded on that webpage.
+With that being said, the performance can be ~10000% or 100 times, faster than html2canvas.
+Checkout the [comparison](https://codesandbox.io/s/tender-river-ifjlm?file=/src/index.js)!
 
-Clone git repository:
 
-    $ git clone git://github.com/niklasvh/html2canvas.git
+### Installation ###
 
-Install dependencies:
+Available on npm [html2canfast](https://www.npmjs.com/package/html2canfast)
 
-    $ npm install
+Install:
 
-Build browser bundle
-
-    $ npm run build
-
-### Examples ###
-
-For more information and examples, please visit the [homepage](https://html2canvas.hertzen.com) or try the [test console](https://html2canvas.hertzen.com/tests/).
-
-### Contributing ###
-
-If you wish to contribute to the project, please send the pull requests to the develop branch. Before submitting any changes, try and test that the changes work with all the support browsers. If some CSS property isn't supported or is incomplete, please create appropriate tests for it as well before submitting any code changes.
+    $ npm i html2canfast

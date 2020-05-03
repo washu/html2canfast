@@ -1,6 +1,6 @@
 {
-  "title": "html2canvas",
-  "name": "html2canvas",
+  "title": "html2canfast",
+  "name": "html2canfast",
   "description": "Screenshots with JavaScript",
   "main": "dist/html2canvas.js",
   "module": "dist/html2canvas.esm.js",
@@ -8,19 +8,18 @@
   "browser": "dist/html2canvas.js",
   "version": "1.0.0-rc.5",
   "author": {
-    "name": "Niklas von Hertzen",
-    "email": "niklasvh@gmail.com",
-    "url": "https://hertzen.com"
+    "name": "Tobias Liebl",
+    "url": "https://github.com/Tobjoern/html2canfast"
   },
   "engines": {
     "node": ">=8.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:niklasvh/html2canvas.git"
+    "url": "git@github.com:tobjoern/html2canfast.git"
   },
   "bugs": {
-    "url": "https://github.com/niklasvh/html2canvas/issues"
+    "url": "https://github.com/tobjoern/html2canfast/issues"
   },
   "devDependencies": {
     "@babel/cli": "^7.4.3",
@@ -108,7 +107,7 @@
     "watch:unittest": "mocha --require ts-node/register --watch-extensions ts -w src/**/__tests__/*.ts",
     "start": "node tests/server"
   },
-  "homepage": "https://html2canvas.hertzen.com",
+  "homepage": "https://github.com/Tobjoern/html2canfast",
   "license": "MIT",
   "dependencies": {
     "css-line-break": "1.1.1"
