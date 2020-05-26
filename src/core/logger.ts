@@ -22,7 +22,7 @@ export class Logger {
             // eslint-disable-next-line no-console
             if (typeof window !== 'undefined' && window.console && typeof console.log === 'function') {
                 // eslint-disable-next-line no-console
-                console.log(this.id, `${this.getTime()}ms`, ...args);
+                //console.log(this.id, `${this.getTime()}ms`, ...args);
             } else {
                 this.info(...args);
             }

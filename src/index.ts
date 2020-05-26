@@ -123,37 +123,22 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
             const containerWindow = cachedIframe.iframe.contentWindow;
 
             const fastClone = new FastModeCloner(documentCloner, element, containerWindow, options.replaceSelector);
-            Logger.getInstance(instanceName).debug(`Fast clone start`);
             const cloneResult = await fastClone.clone();
-            Logger.getInstance(instanceName).debug(`Flast clone end call`);
-
             if (!cloneResult) {
                 throw new Error('An Error occured, trying to fast clone!');
             }
 
             clonedElement = cloneResult.clonedElement;
         } else {
-            Logger.getInstance(instanceName).debug(`Using fresh cloner`);
             documentCloner.cloneDocument();
             options.cache.watch(element);
-            Logger.getInstance(instanceName).debug(`End clone call`);
-
             clonedElement = documentCloner.clonedReferenceElement;
-
-            Logger.getInstance(instanceName).debug(`ToIframe start`);
             container = await documentCloner.toIFrame(ownerDocument, windowBounds);
-            Logger.getInstance(instanceName).debug(`ToIframe end`);
         }
     } else {
-        Logger.getInstance(instanceName).debug("Using fresh cloner and iframe")
         documentCloner.cloneDocument();
-        Logger.getInstance(instanceName).debug(`End clone call`);
-
         clonedElement = documentCloner.clonedReferenceElement;
-
-        Logger.getInstance(instanceName).debug(`ToIframe start`);
         container = await documentCloner.toIFrame(ownerDocument, windowBounds);
-        Logger.getInstance(instanceName).debug(`ToIframe end`);
     }
 
     if (!clonedElement) {
@@ -207,8 +192,6 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
         Logger.getInstance(instanceName).debug(`Document cloned, using computed rendering`);
 
         CacheStorage.attachInstance(options.cache);
-
-        Logger.getInstance(instanceName).debug(`Starting DOM parsing`);
         const root = options.reuseCache ? parseCacheTree(clonedElement,options.cache) : parseTree(clonedElement);
         CacheStorage.detachInstance();
 
