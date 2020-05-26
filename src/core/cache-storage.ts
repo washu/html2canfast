@@ -11,16 +11,13 @@ export class CacheStorage {
     static create(name: string, options: ResourceOptions): Cache {
         let t = CacheStorage._caches[name];
         if(t) {
-            console.log("Create re-using cache ",name);
             return t;
         }
-        console.log("Create NEW cache ",name)
         CacheStorage._caches[name] = new Cache(name, options);
         return CacheStorage._caches[name]
     }
 
     static destroy(name: string): void {
-        console.log("Asking to remove cache key ",name);
         delete CacheStorage._caches[name];
     }
 

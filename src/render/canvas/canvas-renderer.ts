@@ -719,11 +719,7 @@ export class CanvasRenderer {
                 this.options.height
             );
         }
-        let st = new Date().getTime();
-        console.log("Canvas render starting parse ",new Date(),st);
         const stack = parseStackingContexts(element);
-        console.log("Canvas render ending parse ",new Date(),(new Date().getTime() - st));
-
         await this.renderStack(stack);
         this.applyEffects([], EffectTarget.BACKGROUND_BORDERS);
         return this.canvas;
