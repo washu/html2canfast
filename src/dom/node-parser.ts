@@ -10,8 +10,10 @@ import {InputElementContainer} from './replaced-elements/input-element-container
 import {SelectElementContainer} from './elements/select-element-container';
 import {TextareaElementContainer} from './elements/textarea-element-container';
 import {IFrameElementContainer} from './replaced-elements/iframe-element-container';
+import {Cache} from '../core/cache-storage';
 
 const LIST_OWNERS = ['OL', 'UL', 'MENU'];
+const CACHE_ID = 'data-html2canvas-cache-id';
 
 const parseNodeTree = (node: Node, parent: ElementContainer, root: ElementContainer) => {
     for (let childNode = node.firstChild, nextNode; childNode; childNode = nextNode) {
@@ -40,6 +42,42 @@ const parseNodeTree = (node: Node, parent: ElementContainer, root: ElementContai
         }
     }
 };
+
+const parseCachedNodeTree = (node: Node, parent: ElementContainer, root: ElementContainer, cache: Cache) => {
+    for (let childNode = node.firstChild, nextNode; childNode; childNode = nextNode) {
+        nextNode = childNode.nextSibling;
+        if (isTextNode(childNode) && childNode.data.trim().length > 0) {
+            parent.textNodes.push(new TextContainer(childNode, parent.styles));
+        } else if (isElementNode(childNode)) {
+            let nid = childNode.getAttribute(CACHE_ID) || "-1";
+            if(cache.has_container_key(nid)) {
+                // no op
+                const container = cache.cachedContainer(nid);
+                parent.elements.push(container)
+            } else {
+                const container = createContainer(childNode);
+                if (container.styles.isVisible()) {
+                    if (createsRealStackingContext(childNode, container, root)) {
+                        container.flags |= FLAGS.CREATES_REAL_STACKING_CONTEXT;
+                    } else if (createsStackingContext(container.styles)) {
+                        container.flags |= FLAGS.CREATES_STACKING_CONTEXT;
+                    }
+
+                    if (LIST_OWNERS.indexOf(childNode.tagName) !== -1) {
+                        container.flags |= FLAGS.IS_LIST_OWNER;
+                    }
+
+                    parent.elements.push(container);
+                    if (!isTextareaElement(childNode) && !isSVGElement(childNode) && !isSelectElement(childNode)) {
+                        parseCachedNodeTree(childNode, container, root,cache);
+                    }
+                }
+                cache.addElementContainer(nid,container);
+            }
+        }
+    }
+};
+
 
 const createContainer = (element: Element): ElementContainer => {
     if (isImageElement(element)) {
@@ -87,6 +125,20 @@ export const parseTree = (element: HTMLElement): ElementContainer => {
     parseNodeTree(element, container, container);
     return container;
 };
+
+export const parseCacheTree = (element: HTMLElement, cache: Cache): ElementContainer => {
+
+    let nid = element.getAttribute(CACHE_ID) || "-1";
+    if(cache.has_container_key(nid)) {
+        return cache.cachedContainer(nid);
+    }
+    const container = createContainer(element);
+    container.flags |= FLAGS.CREATES_REAL_STACKING_CONTEXT;
+    parseCachedNodeTree(element, container, container, cache);
+    cache.addElementContainer(nid,container);
+    return container;
+};
+
 
 const createsRealStackingContext = (node: Element, container: ElementContainer, root: ElementContainer): boolean => {
     return (

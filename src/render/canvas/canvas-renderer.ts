@@ -157,7 +157,7 @@ export class CanvasRenderer {
         const fontVariant = styles.fontVariant
             .filter(variant => variant === 'normal' || variant === 'small-caps')
             .join('');
-        const fontFamily = styles.fontFamily.join(', ');
+        const fontFamily = styles.fontFamily.map(fontFamily => `"${fontFamily}"`).join(', ');
         const fontSize = isDimensionToken(styles.fontSize)
             ? `${styles.fontSize.number}${styles.fontSize.unit}`
             : `${styles.fontSize.number}px`;
@@ -719,8 +719,10 @@ export class CanvasRenderer {
                 this.options.height
             );
         }
-
+        let st = new Date().getTime();
+        console.log("Canvas render starting parse ",new Date(),st);
         const stack = parseStackingContexts(element);
+        console.log("Canvas render ending parse ",new Date(),(new Date().getTime() - st));
 
         await this.renderStack(stack);
         this.applyEffects([], EffectTarget.BACKGROUND_BORDERS);

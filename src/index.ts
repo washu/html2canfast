@@ -2,7 +2,7 @@ import {Bounds, parseBounds, parseDocumentSize} from './css/layout/bounds';
 import {color, Color, COLORS, isTransparent} from './css/types/color';
 import {Parser} from './css/syntax/parser';
 import {CloneOptions, DocumentCloner} from './dom/document-cloner';
-import {isBodyElement, isHTMLElement, parseTree} from './dom/node-parser';
+import {isBodyElement, isHTMLElement, parseTree, parseCacheTree} from './dom/node-parser';
 import {Logger} from './core/logger';
 import {CacheStorage, ResourceOptions} from './core/cache-storage';
 import {CanvasRenderer, RenderOptions} from './render/canvas/canvas-renderer';
@@ -10,6 +10,9 @@ import {ForeignObjectRenderer} from './render/canvas/foreignobject-renderer';
 import {IframeStorage} from './core/iframe-storage';
 import {FastModeCloner} from './core/fast-mode-cloner';
 
+declare global {
+    interface Window { __h2cf_img_cache: any; __h2cf_if_cache: any }
+}
 export type Options = CloneOptions &
     RenderOptions &
     ResourceOptions & {
@@ -17,14 +20,19 @@ export type Options = CloneOptions &
         foreignObjectRendering: boolean;
         logging: boolean;
         removeContainer?: boolean;
-
         renderName?: string | null;
         replaceSelector?: string | null;
+        reuseCache?: string | null;
+        useCache: boolean;
     };
 
 const parseColor = (value: string): Color => color.parse(Parser.create(value).parseComponentValue());
 
 const html2canvas = (element: HTMLElement, options: Partial<Options> = {}): Promise<HTMLCanvasElement> => {
+    if (typeof window !== 'undefined') {
+        window.__h2cf_img_cache = CacheStorage;
+        window.__h2cf_if_cache = IframeStorage;
+    }
     return renderElement(element, options);
 };
 
@@ -32,6 +40,8 @@ export default html2canvas;
 
 if (typeof window !== 'undefined') {
     CacheStorage.setContext(window);
+    window.__h2cf_img_cache = CacheStorage;
+    window.__h2cf_if_cache = IframeStorage;
 }
 
 const renderElement = async (element: HTMLElement, opts: Partial<Options>): Promise<HTMLCanvasElement> => {
@@ -47,7 +57,7 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
         throw new Error(`Document is not attached to a Window`);
     }
 
-    const instanceName = (Math.round(Math.random() * 1000) + Date.now()).toString(16);
+    const instanceName = opts.reuseCache ? opts.reuseCache : (Math.round(Math.random() * 1000) + Date.now()).toString(16);
 
     const {width, height, left, top} =
         isBodyElement(element) || isHTMLElement(element) ? parseDocumentSize(ownerDocument) : parseBounds(element);
@@ -78,21 +88,25 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
         height: Math.ceil(height),
         id: instanceName,
         renderName: null,
-        replaceSelector: null
+        replaceSelector: null,
+        reuseCache: null,
+        useCache: false
     };
 
     const options: Options = {...defaultOptions, ...resourceOptions, ...opts};
 
     const windowBounds = new Bounds(options.scrollX, options.scrollY, options.windowWidth, options.windowHeight);
 
-    Logger.create({id: instanceName, enabled: options.logging});
+    Logger.create({id: instanceName, enabled: true}); //options.logging});
     Logger.getInstance(instanceName).debug(`Starting document clone`);
     const documentCloner = new DocumentCloner(element, {
         id: instanceName,
+        cache: options.cache,
         onclone: options.onclone,
         ignoreElements: options.ignoreElements,
         inlineImages: options.foreignObjectRendering,
-        copyStyles: options.foreignObjectRendering
+        copyStyles: options.foreignObjectRendering,
+        useCache: opts.reuseCache != null
     });
 
     let clonedElement: HTMLElement | undefined;
@@ -100,6 +114,7 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
     let container!: HTMLIFrameElement;
 
     if (options.replaceSelector && options.renderName) {
+        Logger.getInstance(instanceName).debug("using cached iframe and cloner")
         const cachedIframe = IframeStorage.getIframe(options.renderName);
 
         if (cachedIframe && cachedIframe.iframe.contentWindow !== null) {
@@ -108,8 +123,9 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
             const containerWindow = cachedIframe.iframe.contentWindow;
 
             const fastClone = new FastModeCloner(documentCloner, element, containerWindow, options.replaceSelector);
-
+            Logger.getInstance(instanceName).debug(`Fast clone start`);
             const cloneResult = await fastClone.clone();
+            Logger.getInstance(instanceName).debug(`Flast clone end call`);
 
             if (!cloneResult) {
                 throw new Error('An Error occured, trying to fast clone!');
@@ -117,18 +133,27 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
 
             clonedElement = cloneResult.clonedElement;
         } else {
+            Logger.getInstance(instanceName).debug(`Using fresh cloner`);
             documentCloner.cloneDocument();
+            options.cache.watch(element);
+            Logger.getInstance(instanceName).debug(`End clone call`);
 
             clonedElement = documentCloner.clonedReferenceElement;
 
+            Logger.getInstance(instanceName).debug(`ToIframe start`);
             container = await documentCloner.toIFrame(ownerDocument, windowBounds);
+            Logger.getInstance(instanceName).debug(`ToIframe end`);
         }
     } else {
+        Logger.getInstance(instanceName).debug("Using fresh cloner and iframe")
         documentCloner.cloneDocument();
+        Logger.getInstance(instanceName).debug(`End clone call`);
 
         clonedElement = documentCloner.clonedReferenceElement;
 
+        Logger.getInstance(instanceName).debug(`ToIframe start`);
         container = await documentCloner.toIFrame(ownerDocument, windowBounds);
+        Logger.getInstance(instanceName).debug(`ToIframe end`);
     }
 
     if (!clonedElement) {
@@ -182,8 +207,9 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
         Logger.getInstance(instanceName).debug(`Document cloned, using computed rendering`);
 
         CacheStorage.attachInstance(options.cache);
+
         Logger.getInstance(instanceName).debug(`Starting DOM parsing`);
-        const root = parseTree(clonedElement);
+        const root = options.reuseCache ? parseCacheTree(clonedElement,options.cache) : parseTree(clonedElement);
         CacheStorage.detachInstance();
 
         if (backgroundColor === root.styles.backgroundColor) {
@@ -209,6 +235,9 @@ const renderElement = async (element: HTMLElement, opts: Partial<Options>): Prom
 
     Logger.getInstance(instanceName).debug(`Finished rendering`);
     Logger.destroy(instanceName);
-    CacheStorage.destroy(instanceName);
+    if (!options.reuseCache) {
+        IframeStorage.clearAll();
+        CacheStorage.clearAll();
+    }
     return canvas;
 };

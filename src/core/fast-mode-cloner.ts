@@ -29,15 +29,11 @@ export class FastModeCloner {
     private waitForLoad(clonedElement: any) {
         return new Promise(async res => {
             const images = clonedElement.querySelectorAll('img') as NodeList;
-
             const imgResolvePromises: any[] = [];
-
             images.forEach(img => {
                 imgResolvePromises.push(this.waitForImageLoad(img));
             });
-
             await Promise.all(imgResolvePromises);
-
             res();
         });
     }
@@ -45,31 +41,25 @@ export class FastModeCloner {
     // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
     public async clone(): Promise<{clonedElement: HTMLElement} | null> {
         const documentCloner = this.documentCloner;
-
         const element = this.element;
-
         const referenceSelector = this.referenceSelector;
-
         const containerWindow = this.containerWindow;
-
-        const clonedReferenceNode = documentCloner.cloneNode(element);
-
+        let copyRef = null;
+        if(this.documentCloner.options.cache.has_key(element.getAttribute('data-html2canvas-cache-id') || "-1")) {
+            copyRef = this.documentCloner.options.cache.cachedNode(element.getAttribute('data-html2canvas-cache-id') || "-1");
+        }
+        const clonedReferenceNode = copyRef || documentCloner.cloneNode(element);
         if (clonedReferenceNode) {
             const containerDoc = containerWindow.document;
-
             const containerReferenceElement = containerDoc.querySelector(referenceSelector);
-
             if (containerReferenceElement) {
                 containerReferenceElement.replaceWith(clonedReferenceNode);
-
                 await this.waitForLoad(clonedReferenceNode);
-
                 return {
                     clonedElement: clonedReferenceNode as any
                 };
             }
         }
-
         return null;
     }
 }

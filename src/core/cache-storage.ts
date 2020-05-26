@@ -1,5 +1,6 @@
 import {FEATURES} from './features';
 import {Logger} from './logger';
+import {ElementContainer} from '../dom/element-container';
 
 export class CacheStorage {
     private static _caches: {[key: string]: Cache} = {};
@@ -8,11 +9,26 @@ export class CacheStorage {
     private static _current: Cache | null = null;
 
     static create(name: string, options: ResourceOptions): Cache {
-        return (CacheStorage._caches[name] = new Cache(name, options));
+        let t = CacheStorage._caches[name];
+        if(t) {
+            console.log("Create re-using cache ",name);
+            return t;
+        }
+        console.log("Create NEW cache ",name)
+        CacheStorage._caches[name] = new Cache(name, options);
+        return CacheStorage._caches[name]
     }
 
     static destroy(name: string): void {
+        console.log("Asking to remove cache key ",name);
         delete CacheStorage._caches[name];
+    }
+
+    public static clearAll(): void {
+        Object.keys(CacheStorage._caches).forEach(function(key){
+            CacheStorage._caches[key].clearWatchers()
+        })
+        CacheStorage._caches = {};
     }
 
     static open(name: string): Cache {
@@ -25,7 +41,7 @@ export class CacheStorage {
     }
 
     static getOrigin(url: string): string {
-        const link = CacheStorage._link;
+        let link = CacheStorage._link;
         if (!link) {
             return 'about:blank';
         }
@@ -39,7 +55,7 @@ export class CacheStorage {
         return CacheStorage.getOrigin(src) === CacheStorage._origin;
     }
 
-    static setContext(window: Window) {
+    public static setContext(window: Window) {
         CacheStorage._link = window.document.createElement('a');
         CacheStorage._origin = CacheStorage.getOrigin(window.location.href);
     }
@@ -67,17 +83,28 @@ export interface ResourceOptions {
     allowTaint: boolean;
     proxy?: string;
 }
+const CACHE_ID = 'data-html2canvas-cache-id';
+const IGNORE_ATTRIBUTE = 'data-html2canvas-ignore';
 
 export class Cache {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly _cache: {[key: string]: Promise<any>};
+    private readonly _vdom: {[key: string]: HTMLElement};
+    private readonly _parents: {[key: string]: string};
+    private readonly _pcache: {[key: string]: ElementContainer};
     private readonly _options: ResourceOptions;
     private readonly id: string;
-
+    private watcher: MutationObserver | null;
+    private cache_seed: number;
     constructor(id: string, options: ResourceOptions) {
         this.id = id;
         this._options = options;
         this._cache = {};
+        this._pcache = {};
+        this._vdom = {};
+        this._parents = {};
+        this.watcher = null;
+        this.cache_seed = Math.round(Math.random() * 1000) + Date.now();
     }
 
     addImage(src: string): Promise<void> {
@@ -93,7 +120,94 @@ export class Cache {
 
         return result;
     }
+    nextCacheId(): string{
+        this.cache_seed = this.cache_seed + 1;
+        return this.cache_seed.toString(16);
+    }
+    addNode(src: string,node: HTMLElement,parent: string) {
+        if(src != "-1") {
+            this._vdom[src] = node;
+            this._parents[src] = parent;
+        }
+    }
+    addElementContainer(src: string,node: ElementContainer) {
+        if(src != "-1") {
+            this._pcache[src] = node;
+        }
+    }
+    removeNode(src: string) {
+        if(src != "-1") {
+            if(this._vdom[src]) {
+                const pid = this._parents[src];
+                if(pid) {
+                    this.removeNode(pid)
+                }
+                delete this._vdom[src];
+                delete this._parents[src];
+                delete this._pcache[src];
+            }
+        }
+    }
+    cachedContainer(id: string) {
+        return this._pcache[id];
+    }
+    cachedNode(id: string) {
+        return this._vdom[id];
+    }
+    clearWatchers(){
+        if(this.watcher)
+            this.watcher.disconnect();
+        this.watcher = null;
+    }
 
+    watch(node: HTMLElement){
+        let me = this;
+        if(me.watcher)
+            return;
+        function callback(mutationList: MutationRecord[]) {
+            mutationList.forEach((mutation) => {
+                switch(mutation.type) {
+                    case 'childList':
+                        let anode_element = mutation.target as HTMLElement;
+                        let anid = anode_element.getAttribute(CACHE_ID) || "-1";
+                        if(me.has_key(anid)) {
+                            me.removeNode(anid);
+                        }
+                        let node_list = mutation.removedNodes;
+                        if (node_list) {
+                            for (let i = 0; i < node_list.length; i++) {
+                                let node : Node = node_list[i];
+                                if (node.nodeType == Node.ELEMENT_NODE) {
+                                    let node_element = node as HTMLElement;
+                                    let nid = node_element.getAttribute(CACHE_ID) || "-1";
+                                    if(me.has_key(nid)) {
+                                        me.removeNode(nid);
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case 'attributes':
+                        let node_element = mutation.target as HTMLElement;
+                        if(node_element.getAttribute(IGNORE_ATTRIBUTE) == "true")
+                            break;
+                        let nid = node_element.getAttribute(CACHE_ID) || "-1";
+                        if(me.has_key(nid)) {
+                            me.removeNode(nid);
+                        }
+                        break;
+                }
+            });
+        }
+        me.watcher = new MutationObserver(callback);
+        me.watcher.observe(node,{
+            childList: false,
+            attributes: true,
+            attributeOldValue: true,
+            subtree: true,
+            attributeFilter: ['hidden','style','class']//['hidden','style','class'],
+        })
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     match(src: string): Promise<any> {
         return this._cache[src];
@@ -141,6 +255,15 @@ export class Cache {
             }
         });
     }
+
+    has_key(key: string){
+        return typeof this._vdom[key] !== 'undefined';
+    }
+
+    has_container_key(key: string){
+        return typeof this._pcache[key] !== 'undefined';
+    }
+
 
     private has(key: string): boolean {
         return typeof this._cache[key] !== 'undefined';

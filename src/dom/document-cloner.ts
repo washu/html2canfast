@@ -19,11 +19,14 @@ import {CounterState, createCounterText} from '../css/types/functions/counter';
 import {LIST_STYLE_TYPE, listStyleType} from '../css/property-descriptors/list-style-type';
 import {CSSParsedCounterDeclaration, CSSParsedPseudoDeclaration} from '../css/index';
 import {getQuote} from '../css/property-descriptors/quotes';
+import {Cache} from '../core/cache-storage';
 
 export interface CloneOptions {
     id: string;
     ignoreElements?: (element: Element) => boolean;
     onclone?: (document: Document) => void;
+    cache: Cache;
+    useCache: boolean;
 }
 
 export type CloneConfigurations = CloneOptions & {
@@ -32,10 +35,10 @@ export type CloneConfigurations = CloneOptions & {
 };
 
 const IGNORE_ATTRIBUTE = 'data-html2canvas-ignore';
-
+const CACHE_ID = 'data-html2canvas-cache-id';
 export class DocumentCloner {
     private readonly scrolledElements: [Element, number, number][];
-    private readonly options: CloneConfigurations;
+    readonly options: CloneConfigurations;
     private readonly referenceElement: HTMLElement;
     clonedReferenceElement?: HTMLElement;
     private documentElement!: HTMLElement;
@@ -56,8 +59,24 @@ export class DocumentCloner {
 
     cloneDocument() {
         const element = this.referenceElement
-
+        if(this.options.useCache) {
+            if (element.getAttribute(CACHE_ID) != "-1") {
+                if (this.options.cache.has_key(element.getAttribute(CACHE_ID) || "-1")) {
+                    this.documentElement = this.options.cache.cachedNode(element.getAttribute(CACHE_ID) || "-1");
+                    if (this.documentElement) {
+                        return;
+                    }
+                }
+            } else {
+                element.setAttribute(CACHE_ID, this.options.cache.nextCacheId());
+            }
+        } else {
+            element.removeAttribute(CACHE_ID)
+        }
+        // after we clone the element lets cache it, we are going to cascade up anyways
         this.documentElement = this.cloneNode(element.ownerDocument!.documentElement) as HTMLElement;
+        if(this.options.useCache)
+            this.options.cache.addNode(element.getAttribute(CACHE_ID) || "-1",this.documentElement,"-1");
     }
 
     toIFrame(ownerDocument: Document, windowSize: Bounds): Promise<HTMLIFrameElement> {
@@ -121,19 +140,18 @@ export class DocumentCloner {
     }
 
     createElementClone(node: HTMLElement): HTMLElement {
-        if (isCanvasElement(node)) {
+        if(isCanvasElement(node)) {
             return this.createCanvasClone(node);
         }
         /*
         if (isIFrameElement(node)) {
             return this.createIFrameClone(node);
         }
-*/
+        */
         if (isStyleElement(node)) {
             return this.createStyleClone(node);
         }
-
-        return node.cloneNode(false) as HTMLElement;
+        return  node.cloneNode(false) as HTMLElement;
     }
 
     createStyleClone(node: HTMLStyleElement): HTMLStyleElement {
@@ -259,12 +277,27 @@ export class DocumentCloner {
         if (!node.ownerDocument) {
             return node.cloneNode(false);
         }
-
         const window = node.ownerDocument.defaultView;
 
         if (isHTMLElementNode(node) && window) {
+            let nid = node.getAttribute(CACHE_ID) || '-1';
+            let clone_copy = null;
+            if(this.options.useCache) {
+                if (this.options.cache.has_key(nid)) {
+                    clone_copy = this.options.cache.cachedNode(nid);
+                    if (this.referenceElement === node) {
+                        this.clonedReferenceElement = clone_copy;
+                        return clone_copy;
+                    }
+                    //console.log("Using cached clone ",clone_copy);
+                } else {
+                    nid = this.options.cache.nextCacheId();
+                    node.setAttribute(CACHE_ID, nid);
+                }
+            } else {
+                node.removeAttribute(CACHE_ID)
+            }
             const clone = this.createElementClone(node);
-
             const style = window.getComputedStyle(node);
             const styleBefore = window.getComputedStyle(node, ':before');
             const styleAfter = window.getComputedStyle(node, ':after');
@@ -293,11 +326,17 @@ export class DocumentCloner {
             }
 
             if (before) {
+                if(clone_copy && clone.children.length > 0 && isElementNode(clone.children[0])) {
+                    clone.removeChild(clone.children[0]);
+                }
                 clone.insertBefore(before, clone.firstChild);
             }
 
             const after = this.resolvePseudoContent(node, clone, styleAfter, PseudoElementType.AFTER);
             if (after) {
+                if(clone_copy && clone.children.length > 0 && isElementNode(clone.children[clone.children.length - 1])){
+                    clone.removeChild(clone.children[clone.children.length - 1]);
+                }
                 clone.appendChild(after);
             }
 
@@ -319,10 +358,10 @@ export class DocumentCloner {
             ) {
                 clone.value = node.value;
             }
-
+            if(this.options.useCache) // dont cache canvas as we cnt detect its changes.
+                this.options.cache.addNode(nid,clone,node.parentElement ? node.parentElement.getAttribute(CACHE_ID) || '-1' : '-1');
             return clone;
         }
-
         return node.cloneNode(false);
     }
 
@@ -474,6 +513,10 @@ const iframeLoader = (iframe: HTMLIFrameElement): Promise<HTMLIFrameElement> => 
         cloneWindow.onload = iframe.onload = documentClone.onreadystatechange = () => {
             cloneWindow.onload = iframe.onload = documentClone.onreadystatechange = null;
             const interval = setInterval(() => {
+                if(documentClone.body == null){
+                    clearInterval(interval);
+                    reject(`no body object found`)
+                }
                 if (documentClone.body.childNodes.length > 0 && documentClone.readyState === 'complete') {
                     clearInterval(interval);
                     resolve(iframe);

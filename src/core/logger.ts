@@ -20,9 +20,9 @@ export class Logger {
     debug(...args: any) {
         if (this.enabled) {
             // eslint-disable-next-line no-console
-            if (typeof window !== 'undefined' && window.console && typeof console.debug === 'function') {
+            if (typeof window !== 'undefined' && window.console && typeof console.log === 'function') {
                 // eslint-disable-next-line no-console
-                console.debug(this.id, `${this.getTime()}ms`, ...args);
+                console.log(this.id, `${this.getTime()}ms`, ...args);
             } else {
                 this.info(...args);
             }
