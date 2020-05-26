@@ -1,6 +1,8 @@
 import {FEATURES} from './features';
 import {Logger} from './logger';
 import {ElementContainer} from '../dom/element-container';
+const CACHE_ID = 'data-html2canvas-cache-id';
+const IGNORE_ATTRIBUTE = 'data-html2canvas-ignore';
 
 export class CacheStorage {
     private static _caches: {[key: string]: Cache} = {};
@@ -26,6 +28,9 @@ export class CacheStorage {
             CacheStorage._caches[key].clearWatchers()
         })
         CacheStorage._caches = {};
+        document.querySelectorAll("[data-html2canvas-cache-id]").forEach((x)=>{
+           x.removeAttribute(CACHE_ID);
+        });
     }
 
     static open(name: string): Cache {
@@ -80,8 +85,6 @@ export interface ResourceOptions {
     allowTaint: boolean;
     proxy?: string;
 }
-const CACHE_ID = 'data-html2canvas-cache-id';
-const IGNORE_ATTRIBUTE = 'data-html2canvas-ignore';
 
 export class Cache {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
