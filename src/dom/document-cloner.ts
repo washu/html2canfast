@@ -59,6 +59,7 @@ export class DocumentCloner {
 
     cloneDocument() {
         const element = this.referenceElement
+        /**
         if(this.options.useCache) {
             if (element.getAttribute(CACHE_ID) != "-1") {
                 if (this.options.cache.has_key(element.getAttribute(CACHE_ID) || "-1")) {
@@ -73,10 +74,11 @@ export class DocumentCloner {
         } else {
             element.removeAttribute(CACHE_ID)
         }
+        **/
         // after we clone the element lets cache it, we are going to cascade up anyways
         this.documentElement = this.cloneNode(element.ownerDocument!.documentElement) as HTMLElement;
-        if(this.options.useCache)
-            this.options.cache.addNode(element.getAttribute(CACHE_ID) || "-1",this.documentElement,"-1");
+        //if(this.options.useCache)
+        //    this.options.cache.addNode(element.getAttribute(CACHE_ID) || "-1",this.documentElement,"-1");
     }
 
     toIFrame(ownerDocument: Document, windowSize: Bounds): Promise<HTMLIFrameElement> {
@@ -283,13 +285,13 @@ export class DocumentCloner {
             let nid = node.getAttribute(CACHE_ID) || '-1';
             let clone_copy = null;
             if(this.options.useCache) {
-                if (this.options.cache.has_key(nid)) {
+                if (this.options.cache.has_key(nid) && nid != "-1") {
                     clone_copy = this.options.cache.cachedNode(nid);
                     if (this.referenceElement === node) {
                         this.clonedReferenceElement = clone_copy;
+                        console.log("Using cached clone ",clone_copy);
                         return clone_copy;
                     }
-                    //console.log("Using cached clone ",clone_copy);
                 } else {
                     nid = this.options.cache.nextCacheId();
                     node.setAttribute(CACHE_ID, nid);
@@ -326,17 +328,11 @@ export class DocumentCloner {
             }
 
             if (before) {
-                if(clone_copy && clone.children.length > 0 && isElementNode(clone.children[0])) {
-                    clone.removeChild(clone.children[0]);
-                }
                 clone.insertBefore(before, clone.firstChild);
             }
 
             const after = this.resolvePseudoContent(node, clone, styleAfter, PseudoElementType.AFTER);
             if (after) {
-                if(clone_copy && clone.children.length > 0 && isElementNode(clone.children[clone.children.length - 1])){
-                    clone.removeChild(clone.children[clone.children.length - 1]);
-                }
                 clone.appendChild(after);
             }
 

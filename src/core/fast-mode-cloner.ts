@@ -45,16 +45,29 @@ export class FastModeCloner {
         const referenceSelector = this.referenceSelector;
         const containerWindow = this.containerWindow;
         let copyRef = null;
-        if(this.documentCloner.options.cache.has_key(element.getAttribute('data-html2canvas-cache-id') || "-1")) {
+        if(this.documentCloner.options.useCache && this.documentCloner.options.cache.has_key(element.getAttribute('data-html2canvas-cache-id') || "-1")) {
             copyRef = this.documentCloner.options.cache.cachedNode(element.getAttribute('data-html2canvas-cache-id') || "-1");
+            if(copyRef)
+                return {
+                    clonedElement: copyRef as any
+                };
         }
-        const clonedReferenceNode = copyRef || documentCloner.cloneNode(element);
+        let clonedReferenceNode = documentCloner.cloneNode(element);
         if (clonedReferenceNode) {
             const containerDoc = containerWindow.document;
             const containerReferenceElement = containerDoc.querySelector(referenceSelector);
             if (containerReferenceElement) {
                 containerReferenceElement.replaceWith(clonedReferenceNode);
                 await this.waitForLoad(clonedReferenceNode);
+                if(this.documentCloner.options.useCache) {
+                    let sid = this.documentCloner.options.cache.nextCacheId();
+                    let tl = clonedReferenceNode as HTMLElement;
+                    tl.setAttribute("data-html2canvas-cache-id",sid)
+                    this.documentCloner.options.cache.addNode(sid,tl,tl.parentElement!.getAttribute("data-html2canvas-cache-id") || "-1")
+                } else {
+                    let tl = clonedReferenceNode as HTMLElement;
+                    tl.removeAttribute("data-html2canvas-cache-id")
+                }
                 return {
                     clonedElement: clonedReferenceNode as any
                 };
